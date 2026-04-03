@@ -38,3 +38,10 @@
     grid-template-columns: repeat($col, 1fr);
     gap: $gap;
 }
+
+/** Mixins para listas **/
+@mixin reset-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
