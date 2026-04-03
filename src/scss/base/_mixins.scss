@@ -24,3 +24,17 @@
         @content;
     }
 }
+
+/** Mixins para contenedores **/
+
+@mixin contenedor {
+    width: 95%;
+    max-width: 120rem;
+    margin: 0 auto;
+}
+
+@mixin grid($col: 1, $gap: 5rem) {
+    display: grid;
+    grid-template-columns: repeat($col, 1fr);
+    gap: $gap;
+}
