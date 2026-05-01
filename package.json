@@ -14,7 +14,7 @@
   "scripts": {
     "sass": "sass --watch src/scss:build/css",
     "css": "gulp css",
-    "dev": "gulp dev"
+    "dev": "gulp"
   },
   "devDependencies": {
     "gulp": "^5.0.1",
