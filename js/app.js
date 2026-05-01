@@ -40,7 +40,7 @@ function crearGaleria() {
 
 function mostrarImg(i) {
     const imagen = document.createElement('IMG');
-    imagen.src = `src/img/gallery/full/${i}.jpg`;
+    imagen.src = (GALERIA_CLOUDINARY_URLS[i] || `img/gallery/full/${i}.jpg`);
     imagen.alt = 'Imagen galeria';
 
     const modal = document.createElement('DIV');
