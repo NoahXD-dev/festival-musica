@@ -30,7 +30,7 @@ npm-debug.log
 yarn-error.log
 
 # Video / assets generated files (if any)
-*.mp4
+# *.mp4
 *.mov
 *.avi
 
