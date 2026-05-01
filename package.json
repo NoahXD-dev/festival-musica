@@ -15,12 +15,22 @@
     "sass": "sass --watch src/scss:build/css",
     "css": "gulp css",
     "dev": "gulp",
-    "deploy": "gulp deploySite"
+    "build": "gulp build",
+    "build:prod": "gulp buildProd",
+    "deploy": "gulp deploySite",
+    "release:patch": "npm version patch",
+    "release:publish": "git push && git push --tags",
+    "release:github": "node scripts/release.mjs github",
+    "release": "node scripts/release.mjs all"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0",
     "gulp": "^5.0.1",
     "gulp-sass": "^6.0.1",
     "sass": "^1.98.0"
+  },
+  "dependencies": {
+    "cloudinary": "^2.10.0",
+    "dotenv": "^17.4.2"
   }
 }
