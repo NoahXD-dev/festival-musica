@@ -37,3 +37,5 @@ yarn-error.log
 # Package locks are usually committed, but ignore if you prefer
 package-lock.json
 yarn.lock
+
+.cursorignore
