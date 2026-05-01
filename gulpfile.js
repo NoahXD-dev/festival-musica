@@ -1,6 +1,7 @@
 import gulpSass from 'gulp-sass';
 import * as dartSass from 'sass';
 import { src, dest, watch, series } from 'gulp';
+import { publish } from 'gh-pages';
 
 const sass = gulpSass(dartSass);
 
@@ -19,9 +20,22 @@ export function css( done ) {
     done();
 }
 
+export function html( done ) {
+    src('src/*.html')
+        .pipe(dest('build'));
+    done();
+}
+
+export function deploy( done ) {
+    publish('build', {
+        branch: 'gh-pages',
+    }, done);
+}
+
 export function dev() {
     watch('src/scss/**/*.scss', css);
     watch('src/js/**/*.js', js);
+    watch('src/*.html', html);
 }
 
-export default series( js, css, dev )
+export default series(js, css, html, dev);
