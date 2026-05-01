@@ -1,6 +1,22 @@
 document.addEventListener('DOMContentLoaded', function() {
-    crearGaleria()
+    navegacionFija();
+    crearGaleria();
+    resaltarEnlace();
+    scrollNav();
 });
+
+function navegacionFija() {
+    const header = document.querySelector('.header');
+    const sobreFestival = document.querySelector('.sobre-festival');
+
+    document.addEventListener('scroll', function() {
+        if(sobreFestival.getBoundingClientRect().bottom < 1) {
+            header.classList.add('fixed');
+        } else {
+            header.classList.remove('fixed')
+        }
+    });
+}
 
 function crearGaleria() {
     const CANTIDAD_IMG = 16;
@@ -52,4 +68,43 @@ function cerrarModal() {
         const body = document.querySelector('body');
         body.classList.remove('overFlow-hiden');
     }, 500);
+}
+
+function resaltarEnlace() {
+    document.addEventListener('scroll', function() {
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.navegacion-principal a');
+        let actual = '';
+
+        sections.forEach( section => {
+            const sectionTop = section.offsetTop;
+            const sectionHight = section.offsetHeight;
+
+            if(window.scrollY >= (sectionTop - sectionHight / 3)) {
+                actual = section.id;
+            }
+        });
+
+        navLinks.forEach( link => {
+            link.classList.remove('active');
+
+            if(link.getAttribute('href') === '#'+actual) {
+                link.classList.add('active');
+            }
+        })
+    });
+}
+
+function scrollNav() {
+    const navLinks = document.querySelectorAll('.navegacion-principal a');
+
+    navLinks.forEach( link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+
+            const sectionScroll = e.target.getAttribute('href');
+            const section = document.querySelector(sectionScroll);
+            section.scrollIntoView({ behavior: 'smooth' });
+        });
+    });
 }
