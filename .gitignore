@@ -33,6 +33,9 @@ yarn-error.log
 *.mp4
 *.mov
 *.avi
+src/img/
+video/
+backup_assets_*/
 
 # Package locks are usually committed, but ignore if you prefer
 package-lock.json
