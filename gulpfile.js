@@ -47,7 +47,9 @@ export function dev() {
     watch('src/js/**/*.js', js);
     watch('index.html', html);
     watch('src/img/**/*', images);
+    watch('video/**/*', video);
 }
 
 export const build = series(js, css, html, images, video);
+export const deploySite = series(build, deploy);
 export default series(build, dev);

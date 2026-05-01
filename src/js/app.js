@@ -24,7 +24,7 @@ function crearGaleria() {
 
     for (let i = 1; i <= CANTIDAD_IMG; i++) {
         const imagen = document.createElement('IMG');
-        imagen.src = `src/img/gallery/full/${i}.jpg`;
+        imagen.src = `img/gallery/full/${i}.jpg`;
         imagen.alt = 'Imagen galeria';
 
         // Event handler

@@ -15,7 +15,7 @@
     "sass": "sass --watch src/scss:build/css",
     "css": "gulp css",
     "dev": "gulp",
-    "deploy": "gulp deploy"
+    "deploy": "gulp deploySite"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0",
