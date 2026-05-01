@@ -1,3 +1,5 @@
+const GALERIA_CLOUDINARY_URLS = [null, "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659271/festival_musica/src/img/gallery/full/1.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659271/festival_musica/src/img/gallery/full/2.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659278/festival_musica/src/img/gallery/full/3.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659279/festival_musica/src/img/gallery/full/4.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659280/festival_musica/src/img/gallery/full/5.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659281/festival_musica/src/img/gallery/full/6.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659282/festival_musica/src/img/gallery/full/7.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659283/festival_musica/src/img/gallery/full/8.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659285/festival_musica/src/img/gallery/full/9.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659286/festival_musica/src/img/gallery/full/10.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659287/festival_musica/src/img/gallery/full/11.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659289/festival_musica/src/img/gallery/full/12.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659290/festival_musica/src/img/gallery/full/13.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659291/festival_musica/src/img/gallery/full/14.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659292/festival_musica/src/img/gallery/full/15.jpg", "https://res.cloudinary.com/di12fiqfa/image/upload/v1777659293/festival_musica/src/img/gallery/full/16.jpg"];
+
 document.addEventListener('DOMContentLoaded', function() {
     navegacionFija();
     crearGaleria();
@@ -24,7 +26,7 @@ function crearGaleria() {
 
     for (let i = 1; i <= CANTIDAD_IMG; i++) {
         const imagen = document.createElement('IMG');
-        imagen.src = `src/img/gallery/full/${i}.jpg`;
+        imagen.src = (GALERIA_CLOUDINARY_URLS[i] || `img/gallery/full/${i}.jpg`);
         imagen.alt = 'Imagen galeria';
 
         // Event handler
