@@ -23,23 +23,53 @@ function crearGaleria() {
     const galeria = document.querySelector('.galeria-imagenes');
 
     for (let i = 1; i <= CANTIDAD_IMG; i++) {
-        const imagen = document.createElement('IMG');
-        imagen.src = `img/gallery/full/${i}.jpg`;
+        const picture = document.createElement('picture');
+
+        const sourceAvif = document.createElement('source');
+        sourceAvif.type = 'image/avif';
+        sourceAvif.srcset = `img/gallery/thumb/${i}.avif`;
+
+        const sourceWebp = document.createElement('source');
+        sourceWebp.type = 'image/webp';
+        sourceWebp.srcset = `img/gallery/thumb/${i}.webp`;
+
+        const imagen = document.createElement('img');
+        imagen.loading = 'lazy';
+        imagen.width = '300';
+        imagen.height = '200';
+        imagen.src = `img/gallery/thumb/${i}.jpg`;
         imagen.alt = 'Imagen galeria';
 
-        // Event handler
+        picture.appendChild(sourceAvif);
+        picture.appendChild(sourceWebp);
+        picture.appendChild(imagen);
+
         imagen.onclick = function() {
             mostrarImg(i);
-        }
+        };
 
-        galeria.appendChild(imagen);
+        galeria.appendChild(picture);
     }
 }
 
 function mostrarImg(i) {
-    const imagen = document.createElement('IMG');
+    const picture = document.createElement('picture');
+
+    const sourceAvif = document.createElement('source');
+    sourceAvif.type = 'image/avif';
+    sourceAvif.srcset = `img/gallery/full/${i}.avif`;
+
+    const sourceWebp = document.createElement('source');
+    sourceWebp.type = 'image/webp';
+    sourceWebp.srcset = `img/gallery/full/${i}.webp`;
+
+    const imagen = document.createElement('img');
     imagen.src = `img/gallery/full/${i}.jpg`;
     imagen.alt = 'Imagen galeria';
+
+    picture.appendChild(sourceAvif);
+    picture.appendChild(sourceWebp);
+    picture.appendChild(imagen);
 
     const modal = document.createElement('DIV');
     modal.classList.add('modal');
@@ -50,7 +80,7 @@ function mostrarImg(i) {
     btnCerrar.classList.add('btn-cerrar');
     btnCerrar.onclick = cerrarModal;
 
-    modal.appendChild(imagen);
+    modal.appendChild(picture);
     modal.appendChild(btnCerrar);
 
     const body = document.querySelector('body');

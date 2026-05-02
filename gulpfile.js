@@ -1,11 +1,14 @@
 import gulpSass from 'gulp-sass';
 import * as dartSass from 'sass';
 import { src, dest, watch, series } from 'gulp';
+import terser from 'gulp-terser';
 import { publish } from 'gh-pages';
 import { v2 as cloudinary } from 'cloudinary';
 import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import path from 'path';
 import 'dotenv/config';
+import sharp from 'sharp';
+import { glob } from 'glob';
 
 const sass = gulpSass(dartSass);
 const projectRoot = process.cwd();
@@ -15,6 +18,7 @@ const ASSET_EXTENSIONS = new Set([
     '.jpeg',
     '.png',
     '.webp',
+    '.avif',
     '.gif',
     '.svg',
     '.mp4',
@@ -46,7 +50,8 @@ function getCloudinaryPublicId(localAssetPath) {
     const parsed = path.parse(localAssetPath);
     const relativeDir = parsed.dir === '.' ? '' : parsed.dir;
     const safeDir = relativeDir.replace(/\\/g, '/');
-    const basePath = safeDir ? `${safeDir}/${parsed.name}` : parsed.name;
+    const ext = parsed.ext.toLowerCase();
+    const basePath = safeDir ? `${safeDir}/${parsed.name}${ext}` : `${parsed.name}${ext}`;
     return `${cloudFolder}/${basePath}`;
 }
 
@@ -57,6 +62,80 @@ function isExternalAsset(assetPath) {
 function isUploadableAsset(localAssetPath) {
     const extension = path.extname(localAssetPath).toLowerCase();
     return ASSET_EXTENSIONS.has(extension);
+}
+
+/**
+ * Parte ruta (query/hash) y devuelve candidatos para localizar el archivo en disco.
+ */
+function collectSrcsetUrls(srcsetValue) {
+    return srcsetValue
+        .split(',')
+        .map((part) => part.trim().split(/\s+/)[0])
+        .filter(Boolean);
+}
+
+function collectHtmlAssetPaths(htmlContent) {
+    const localAssets = new Set();
+
+    const consider = (rawPath) => {
+        const assetPath = rawPath.split(/[#?]/)[0].trim();
+        if (!assetPath || isExternalAsset(assetPath)) {
+            return;
+        }
+        if (!isUploadableAsset(assetPath)) {
+            return;
+        }
+        localAssets.add(assetPath);
+    };
+
+    const srcRegex = /\bsrc="([^"]+)"/g;
+    let match;
+    while ((match = srcRegex.exec(htmlContent)) !== null) {
+        consider(match[1]);
+    }
+
+    const srcsetRegex = /\bsrcset="([^"]+)"/g;
+    while ((match = srcsetRegex.exec(htmlContent)) !== null) {
+        for (const url of collectSrcsetUrls(match[1])) {
+            consider(url);
+        }
+    }
+
+    return localAssets;
+}
+
+async function resolveLocalAssetPath(localAssetPath) {
+    const normalized = localAssetPath.replace(/\\/g, '/');
+    const direct = path.resolve(projectRoot, normalized);
+    try {
+        await fs.access(direct);
+        return normalized;
+    } catch {
+        // Referencias build/img/... pueden existir solo en src/img tras copiar lógica alternativa
+    }
+
+    if (normalized.startsWith('build/img/')) {
+        const asSrc = normalized.replace(/^build\/img\//, 'src/img/');
+        const ext = path.extname(asSrc).toLowerCase();
+        const withoutExt = asSrc.slice(0, -ext.length);
+        const fallbacks = [
+            asSrc,
+            `${withoutExt}.jpg`,
+            `${withoutExt}.jpeg`,
+            `${withoutExt}.png`
+        ];
+        for (const candidate of fallbacks) {
+            const absolute = path.resolve(projectRoot, candidate);
+            try {
+                await fs.access(absolute);
+                return candidate;
+            } catch {
+                continue;
+            }
+        }
+    }
+
+    throw new Error(`No se encontró el asset "${localAssetPath}" para subir a Cloudinary.`);
 }
 
 function getResourceType(localAssetPath) {
@@ -82,6 +161,25 @@ function toErrorMessage(error) {
     }
 
     return String(error);
+}
+
+async function resolveGalleryImagePath(kind, index, ext) {
+    const folder = kind === 'thumb' ? 'thumb' : 'full';
+    const candidates = [
+        `src/img/gallery/${folder}/${index}.${ext}`,
+        `build/img/gallery/${folder}/${index}.${ext}`
+    ];
+
+    for (const candidate of candidates) {
+        try {
+            await fs.access(path.resolve(projectRoot, candidate));
+            return candidate;
+        } catch {
+            continue;
+        }
+    }
+
+    return null;
 }
 
 async function ensureAssetInCloudinary(localAssetPath) {
@@ -125,33 +223,28 @@ async function htmlProd() {
     const sourceHtmlPath = path.resolve(projectRoot, 'index.html');
     const outputHtmlPath = path.resolve(projectRoot, 'build/index.html');
     const htmlContent = await fs.readFile(sourceHtmlPath, 'utf-8');
-    const assetRegex = /src="([^"]+)"/g;
-    const localAssets = new Set();
-    let match;
-
-    while ((match = assetRegex.exec(htmlContent)) !== null) {
-        const assetPath = match[1];
-        if (!isExternalAsset(assetPath) && isUploadableAsset(assetPath)) {
-            localAssets.add(assetPath);
-        }
-    }
+    const localAssets = collectHtmlAssetPaths(htmlContent);
 
     const assetMap = new Map();
 
-    for (const localAssetPath of localAssets) {
+    for (const rawAssetPath of localAssets) {
         let cloudUrl;
         try {
-            cloudUrl = await ensureAssetInCloudinary(localAssetPath);
+            const resolvedPath = await resolveLocalAssetPath(rawAssetPath);
+            cloudUrl = await ensureAssetInCloudinary(resolvedPath);
         } catch (error) {
-            throw new Error(`No se pudo procesar el asset HTML "${localAssetPath}": ${toErrorMessage(error)}`);
+            throw new Error(`No se pudo procesar el asset HTML "${rawAssetPath}": ${toErrorMessage(error)}`);
         }
 
-        assetMap.set(localAssetPath, cloudUrl);
+        assetMap.set(rawAssetPath, cloudUrl);
     }
 
     let productionHtml = htmlContent;
-    for (const [localPath, cloudUrl] of assetMap.entries()) {
+    const sortedAssetEntries = [...assetMap.entries()].sort((a, b) => b[0].length - a[0].length);
+
+    for (const [localPath, cloudUrl] of sortedAssetEntries) {
         productionHtml = productionHtml.replaceAll(`src="${localPath}"`, `src="${cloudUrl}"`);
+        productionHtml = productionHtml.replaceAll(`srcset="${localPath}"`, `srcset="${cloudUrl}"`);
     }
 
     await fs.mkdir(path.dirname(outputHtmlPath), { recursive: true });
@@ -171,27 +264,65 @@ async function jsProd() {
     }
 
     const cantidadImg = Number.parseInt(countMatch[1], 10);
-    const galleryUrls = ['null'];
 
-    for (let i = 1; i <= cantidadImg; i++) {
-        const localPath = `src/img/gallery/full/${i}.jpg`;
-        let cloudUrl;
+    async function buildIndexedUrlArray(kind, ext) {
+        const parts = ['null'];
 
-        try {
-            cloudUrl = await ensureAssetInCloudinary(localPath);
-        } catch (error) {
-            throw new Error(`No se pudo procesar la imagen dinámica "${localPath}": ${toErrorMessage(error)}`);
+        for (let i = 1; i <= cantidadImg; i++) {
+            const localPath = await resolveGalleryImagePath(kind, i, ext);
+
+            if (!localPath) {
+                parts.push('null');
+                continue;
+            }
+
+            try {
+                const cloudUrl = await ensureAssetInCloudinary(localPath);
+                parts.push(JSON.stringify(cloudUrl));
+            } catch (error) {
+                throw new Error(
+                    `No se pudo procesar la imagen de galería (${kind}, .${ext}) "${localPath}": ${toErrorMessage(error)}`
+                );
+            }
         }
 
-        galleryUrls.push(JSON.stringify(cloudUrl));
+        return `[${parts.join(', ')}]`;
     }
 
-    const galleryConst = `const GALERIA_CLOUDINARY_URLS = [${galleryUrls.join(', ')}];\n\n`;
-    const dynamicPattern = /`img\/gallery\/full\/\$\{i\}\.jpg`/g;
-    let productionJs = jsContent.replace(dynamicPattern, '(GALERIA_CLOUDINARY_URLS[i] || `img/gallery/full/${i}.jpg`)');
+    const thumbAvif = await buildIndexedUrlArray('thumb', 'avif');
+    const thumbWebp = await buildIndexedUrlArray('thumb', 'webp');
+    const thumbJpg = await buildIndexedUrlArray('thumb', 'jpg');
+    const fullAvif = await buildIndexedUrlArray('full', 'avif');
+    const fullWebp = await buildIndexedUrlArray('full', 'webp');
+    const fullJpg = await buildIndexedUrlArray('full', 'jpg');
+
+    const galleryConst = [
+        `const GALERIA_THUMB_URLS_AVIF = ${thumbAvif};`,
+        `const GALERIA_THUMB_URLS_WEBP = ${thumbWebp};`,
+        `const GALERIA_THUMB_URLS_JPG = ${thumbJpg};`,
+        `const GALERIA_FULL_URLS_AVIF = ${fullAvif};`,
+        `const GALERIA_FULL_URLS_WEBP = ${fullWebp};`,
+        `const GALERIA_FULL_URLS_JPG = ${fullJpg};`,
+        ''
+    ].join('\n');
+
+    const replacements = [
+        [/`img\/gallery\/thumb\/\$\{i\}\.avif`/g, '(GALERIA_THUMB_URLS_AVIF[i] || `img/gallery/thumb/${i}.avif`)'],
+        [/`img\/gallery\/thumb\/\$\{i\}\.webp`/g, '(GALERIA_THUMB_URLS_WEBP[i] || `img/gallery/thumb/${i}.webp`)'],
+        [/`img\/gallery\/thumb\/\$\{i\}\.jpg`/g, '(GALERIA_THUMB_URLS_JPG[i] || `img/gallery/thumb/${i}.jpg`)'],
+        [/`img\/gallery\/full\/\$\{i\}\.avif`/g, '(GALERIA_FULL_URLS_AVIF[i] || `img/gallery/full/${i}.avif`)'],
+        [/`img\/gallery\/full\/\$\{i\}\.webp`/g, '(GALERIA_FULL_URLS_WEBP[i] || `img/gallery/full/${i}.webp`)'],
+        [/`img\/gallery\/full\/\$\{i\}\.jpg`/g, '(GALERIA_FULL_URLS_JPG[i] || `img/gallery/full/${i}.jpg`)']
+    ];
+
+    let productionJs = jsContent;
+
+    for (const [pattern, replacement] of replacements) {
+        productionJs = productionJs.replace(pattern, replacement);
+    }
 
     if (productionJs === jsContent) {
-        throw new Error('No se encontró el patrón dinámico de galería para reescritura en producción.');
+        throw new Error('No se encontró ningún patrón dinámico de galería para reescritura en producción.');
     }
 
     productionJs = `${galleryConst}${productionJs}`;
@@ -202,6 +333,7 @@ async function jsProd() {
 
 export function js(done) {
     src('src/js/app.js')
+        .pipe(terser())
         .pipe(dest('build/js'));
     done();
 }
@@ -217,6 +349,68 @@ export function html(done) {
     src('index.html')
         .pipe(dest('build'));
     done();
+}
+
+export async function crop(done) {
+    const inputFolder = 'src/img/gallery/full';
+    const outputFolder = 'src/img/gallery/thumb';
+    const width = 250;
+    const height = 180;
+
+    try {
+        await fs.mkdir(outputFolder, { recursive: true });
+
+        const files = await fs.readdir(inputFolder);
+        const images = files.filter((file) => /\.(jpg)$/i.test(path.extname(file)));
+
+        await Promise.all(images.map((file) => {
+            const inputFile = path.join(inputFolder, file);
+            const outputFile = path.join(outputFolder, file);
+
+            return sharp(inputFile)
+                .resize(width, height, {
+                    position: 'center'
+                })
+                .toFile(outputFile);
+        }));
+
+        done();
+    } catch (error) {
+        done(error);
+    }
+}
+
+export async function imagenes(done) {
+    const srcDir = './src/img';
+    const buildDir = './build/img';
+    const images = await glob('./src/img/**/*{jpg,png}');
+
+    try {
+        await Promise.all(images.map((file) => {
+            const relativePath = path.relative(srcDir, path.dirname(file));
+            const outputSubDir = path.join(buildDir, relativePath);
+            return procesarImagenes(file, outputSubDir);
+        }));
+        done();
+    } catch (error) {
+        done(error);
+    }
+}
+
+async function procesarImagenes(file, outputSubDir) {
+    await fs.mkdir(outputSubDir, { recursive: true });
+    const baseName = path.basename(file, path.extname(file));
+    const extName = path.extname(file);
+    const outputFile = path.join(outputSubDir, `${baseName}${extName}`);
+    const outputFileWebp = path.join(outputSubDir, `${baseName}.webp`);
+    const outputFileAvif = path.join(outputSubDir, `${baseName}.avif`);
+
+    const options = { quality: 80 };
+    await Promise.all([
+        sharp(file).jpeg(options).toFile(outputFile),
+        sharp(file).webp(options).toFile(outputFileWebp),
+        sharp(file).avif().toFile(outputFileAvif)
+    ]);
 }
 
 export async function deploy() {
@@ -242,10 +436,11 @@ export async function deploy() {
 export function dev() {
     watch('src/scss/**/*.scss', css);
     watch('src/js/**/*.js', js);
+    watch('src/img/**/*.{jpg,png}', imagenes);
     watch('index.html', html);
 }
 
-export const build = series(js, css, html);
+export const build = series(crop, imagenes, js, css, html);
 export const buildProd = series(css, jsProd, htmlProd);
 export const deploySite = series(buildProd, deploy);
 export default series(build, dev);
